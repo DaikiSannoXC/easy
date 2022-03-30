@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import json
 import os
+from pathlib import Path
 
 class CPUDataset():
     def __init__(self, data, targets, transforms = [], batch_size = args.batch_size, use_hd = False):
@@ -594,6 +595,63 @@ def miniImageNet84():
     test_loader = iterator(test, test_targets, transforms = all_transforms, forcecpu = True, shuffle = False)
     return (train_loader, train_clean, val_loader, test_loader), [3, 84, 84], (64, 16, 20, 600), True, False
 
+
+def mvtec(use_hd = True):
+    # Support only test dataset
+    datasets = {}
+
+    for subset in ["test"]:
+        data = []
+        targets = []
+        root_dir = Path(args.dataset_path, 'test')
+        all_image_paths = root_dir.glob('*/*.png')
+        class_names = sorted(list(set(path.parent.name for path in all_image_paths)))
+        class_num = len(class_names)
+        max_element_num = int(np.max([len(list(root_dir.joinpath(class_name).glob('*.png'))) for class_name in class_names]))
+        element_nums = []
+        for class_index, class_name in enumerate(class_names):
+            sub_dir = root_dir.joinpath(class_name)
+            image_paths = list(sub_dir.glob('*.png'))
+            element_nums.append(len(image_paths))
+            for image_path in image_paths:
+                if use_hd:
+                    data.append(str(image_path))
+                else:
+                    image = transforms.ToTensor()(Image.open(image_path).convert('RGB'))
+                    data.append(image)
+                targets.append(class_index)
+            for _ in range(len(image_paths), max_element_num):
+                if use_hd:
+                    data.append(str(image_path))
+                else:
+                    data.append(image)
+                targets.append(class_index)
+        datasets[subset] = [data, torch.LongTensor(targets)]
+
+    norm = transforms.Normalize(np.array([x / 255.0 for x in [125.3, 123.0, 113.9]]), np.array([x / 255.0 for x in [63.0, 62.1, 66.7]]))
+    all_transforms = torch.nn.Sequential(transforms.Resize(92), transforms.CenterCrop(84), norm) if args.sample_aug == 1 else torch.nn.Sequential(transforms.RandomResizedCrop(84), norm)
+    test_loader = iterator(datasets["test"][0], datasets["test"][1], transforms=all_transforms, forcecpu=True, shuffle=False, use_hd=use_hd)
+
+    # dummy valid dataset
+    data = []
+    targets = []
+    if use_hd:
+        element = str(image_path)
+    else:
+        element = image
+    offset = 100
+    for class_index in range(args.n_ways):
+        for _ in range(max_element_num):
+            data.append(element)
+            targets.append(class_index + offset)
+    val_loader = iterator(data, torch.LongTensor(targets), transforms=all_transforms, forcecpu=True, shuffle=False, use_hd=use_hd)
+    val_element_nums = [max_element_num] * args.n_ways
+
+    train_loader = None
+    train_clean = None
+    return (train_loader, train_clean, val_loader, test_loader), [3, 84, 84], (64, class_num, class_num, (None, val_element_nums, element_nums)), True, False
+
+
 def get_dataset(dataset_name):
     if dataset_name.lower() == "cifar10":
         return cifar10(data_augmentation = True)
@@ -617,6 +675,8 @@ def get_dataset(dataset_name):
         return tieredImageNet()
     elif dataset_name.lower() == "fc100":
         return fc100()
+    elif dataset_name.lower() == "mvtec":
+        return mvtec()
     else:
         print("Unknown dataset!")
 

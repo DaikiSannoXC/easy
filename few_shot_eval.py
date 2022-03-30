@@ -163,10 +163,10 @@ def eval_few_shot(train_features, val_features, novel_features, val_run_classes,
 
 def update_few_shot_meta_data(model, train_clean, novel_loader, val_loader, few_shot_meta_data):
 
-    if "M" in args.preprocessing or args.save_features != '':
+    if train_clean is not None and ("M" in args.preprocessing or args.save_features != ''):
         train_features = get_features(model, train_clean)
     else:
-        train_features = torch.Tensor(0,0,0)
+        train_features = torch.Tensor(0, 0, 0)
     val_features = get_features(model, val_loader)
     novel_features = get_features(model, novel_loader)
 
@@ -187,7 +187,10 @@ def evaluate_shot(index, train_features, val_features, novel_features, few_shot_
                 else:
                     torch.save(model.module.state_dict(), args.save_model + str(args.n_shots[index]))
             if args.save_features != "":
-                torch.save(torch.cat([train_features, val_features, novel_features], dim = 0), args.save_features + str(args.n_shots[index]))
+                if train_features.shape[0] == 0:
+                    torch.save(torch.cat([val_features, novel_features], dim = 0), args.save_features + str(args.n_shots[index]))
+                else:
+                    torch.save(torch.cat([train_features, val_features, novel_features], dim = 0), args.save_features + str(args.n_shots[index]))
         few_shot_meta_data["best_val_acc"][index] = val_acc
         few_shot_meta_data["best_novel_acc"][index] = novel_acc
     return val_acc, val_conf, novel_acc, novel_conf
