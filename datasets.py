@@ -1,3 +1,4 @@
+import copy
 from torchvision import transforms, datasets
 from args import args
 import numpy as np
@@ -596,7 +597,7 @@ def miniImageNet84():
     return (train_loader, train_clean, val_loader, test_loader), [3, 84, 84], (64, 16, 20, 600), True, False
 
 
-def mvtec(use_hd = True):
+def mvtec(use_hd=True, binary_classification=False):
     # Support only test dataset
     datasets = {}
 
@@ -604,23 +605,37 @@ def mvtec(use_hd = True):
         data = []
         targets = []
         root_dir = Path(args.dataset_path, 'test')
-        all_image_paths = root_dir.glob('*/*.png')
+        all_image_paths = list(root_dir.glob('*/*.png'))
         class_names = sorted(list(set(path.parent.name for path in all_image_paths)))
-        class_num = len(class_names)
-        max_element_num = int(np.max([len(list(root_dir.joinpath(class_name).glob('*.png'))) for class_name in class_names]))
-        element_nums = []
-        for class_index, class_name in enumerate(class_names):
-            sub_dir = root_dir.joinpath(class_name)
-            image_paths = list(sub_dir.glob('*.png'))
-            element_nums.append(len(image_paths))
-            for image_path in image_paths:
-                if use_hd:
-                    data.append(str(image_path))
-                else:
-                    image = transforms.ToTensor()(Image.open(image_path).convert('RGB'))
-                    data.append(image)
-                targets.append(class_index)
-            for _ in range(len(image_paths), max_element_num):
+        if binary_classification:
+            anomaly_class_names = copy.copy(class_names)
+            anomaly_class_names.remove("good")
+            class_name_lists = [["good"], anomaly_class_names]
+            class_num = 2
+            normal_element_num = len(list(root_dir.joinpath("good").glob('*.png')))
+            total_element_num = len(all_image_paths)
+            if normal_element_num > total_element_num // 2:
+                max_element_num = normal_element_num
+            else:
+                max_element_num = total_element_num - normal_element_num
+        else:
+            class_name_lists = [[class_name] for class_name in class_names]
+            max_element_num = int(np.max([len(list(root_dir.joinpath(class_name).glob('*.png'))) for class_name in class_names]))
+        class_num = len(class_name_lists)
+        element_nums = [0] * class_num
+        for class_index, sub_class_names in enumerate(class_name_lists):
+            for class_name in sub_class_names:
+                sub_dir = root_dir.joinpath(class_name)
+                image_paths = list(sub_dir.glob('*.png'))
+                element_nums[class_index] += len(image_paths)
+                for image_path in image_paths:
+                    if use_hd:
+                        data.append(str(image_path))
+                    else:
+                        image = transforms.ToTensor()(Image.open(image_path).convert('RGB'))
+                        data.append(image)
+                    targets.append(class_index)
+            for _ in range(element_nums[class_index], max_element_num):
                 if use_hd:
                     data.append(str(image_path))
                 else:
@@ -629,7 +644,7 @@ def mvtec(use_hd = True):
         datasets[subset] = [data, torch.LongTensor(targets)]
 
     norm = transforms.Normalize(np.array([x / 255.0 for x in [125.3, 123.0, 113.9]]), np.array([x / 255.0 for x in [63.0, 62.1, 66.7]]))
-    all_transforms = torch.nn.Sequential(transforms.Resize(92), transforms.CenterCrop(84), norm) if args.sample_aug == 1 else torch.nn.Sequential(transforms.RandomResizedCrop(84), norm)
+    all_transforms = torch.nn.Sequential(transforms.Resize(256), transforms.CenterCrop(224), norm) if args.sample_aug == 1 else torch.nn.Sequential(transforms.RandomResizedCrop(224), norm)
     test_loader = iterator(datasets["test"][0], datasets["test"][1], transforms=all_transforms, forcecpu=True, shuffle=False, use_hd=use_hd)
 
     # dummy valid dataset
