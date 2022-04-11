@@ -39,7 +39,7 @@ def ncm(train_features, features, run_classes, run_indices, n_shots, elements_tr
             means = torch.mean(runs[:,:,:n_shots], dim = 2)
             distances = torch.norm(runs[:,:,n_shots:].reshape(batch_few_shot_runs, args.n_ways, 1, -1, dim) - means.reshape(batch_few_shot_runs, 1, args.n_ways, 1, dim), dim = 4, p = 2)
             winners = torch.min(distances, dim = 2)[1]
-            scores += list((winners == targets).float().mean(dim = 1).mean(dim = 1).to("cpu").numpy())
+            scores += list((winners == targets).float().mean(dim = 1).mean(dim = 1).detach().to("cpu").numpy())
         return stats(scores, "")
 
 def transductive_ncm(train_features, features, run_classes, run_indices, n_shots, n_iter_trans = args.transductive_n_iter, n_iter_trans_sinkhorn = args.transductive_n_iter_sinkhorn, temp_trans = args.transductive_temperature, alpha_trans = args.transductive_alpha, cosine = args.transductive_cosine, elements_train=None):

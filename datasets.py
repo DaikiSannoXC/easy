@@ -655,12 +655,12 @@ def mvtec(use_hd=True, binary_classification=False):
     else:
         element = image
     offset = 100
-    for class_index in range(args.n_ways):
+    for class_index in range(class_num):
         for _ in range(max_element_num):
             data.append(element)
             targets.append(class_index + offset)
     val_loader = iterator(data, torch.LongTensor(targets), transforms=all_transforms, forcecpu=True, shuffle=False, use_hd=use_hd)
-    val_element_nums = [max_element_num] * args.n_ways
+    val_element_nums = [max_element_num] * class_num
 
     train_loader = None
     train_clean = None
